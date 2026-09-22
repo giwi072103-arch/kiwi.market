@@ -1,0 +1,18 @@
+CREATE TABLE IF NOT EXISTS users(id uuid PRIMARY KEY, email text UNIQUE, telegram_id text UNIQUE, name text NOT NULL, password text, role text NOT NULL DEFAULT 'user' CHECK(role IN ('user','moderator','admin','owner')), banned boolean NOT NULL DEFAULT false, balance bigint NOT NULL DEFAULT 0 CHECK(balance>=0), created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS sessions(token text PRIMARY KEY,user_id uuid NOT NULL REFERENCES users(id),expires_at timestamptz NOT NULL);
+CREATE TABLE IF NOT EXISTS categories(id text PRIMARY KEY,name text NOT NULL,color text NOT NULL DEFAULT '#b8ee54',enabled boolean NOT NULL DEFAULT true);
+CREATE TABLE IF NOT EXISTS settings(id integer PRIMARY KEY CHECK(id=1),commission_bps integer NOT NULL DEFAULT 500 CHECK(commission_bps BETWEEN 0 AND 3000),maintenance boolean NOT NULL DEFAULT false);
+INSERT INTO settings(id) VALUES(1) ON CONFLICT DO NOTHING;
+CREATE TABLE IF NOT EXISTS products(id uuid PRIMARY KEY,seller_id uuid NOT NULL REFERENCES users(id),category_id text NOT NULL REFERENCES categories(id),title text NOT NULL,description text NOT NULL,price bigint NOT NULL CHECK(price>0),image text NOT NULL DEFAULT '',status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','active','rejected','archived')),auto_delivery boolean NOT NULL DEFAULT false,created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS stock(id uuid PRIMARY KEY,product_id uuid NOT NULL REFERENCES products(id),secret text NOT NULL,sold boolean NOT NULL DEFAULT false);
+CREATE TABLE IF NOT EXISTS orders(id uuid PRIMARY KEY,product_id uuid NOT NULL REFERENCES products(id),buyer_id uuid NOT NULL REFERENCES users(id),seller_id uuid NOT NULL REFERENCES users(id),title text NOT NULL,amount bigint NOT NULL CHECK(amount>0),fee bigint NOT NULL CHECK(fee>=0 AND fee<=amount),status text NOT NULL CHECK(status IN ('paid','delivered','disputed','completed','refunded')),delivery text,reason text NOT NULL DEFAULT '',request_key uuid NOT NULL,created_at timestamptz NOT NULL DEFAULT now(),UNIQUE(buyer_id,request_key));
+CREATE TABLE IF NOT EXISTS messages(id uuid PRIMARY KEY,order_id uuid NOT NULL REFERENCES orders(id),sender_id uuid NOT NULL REFERENCES users(id),body text NOT NULL,created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS reviews(id uuid PRIMARY KEY,order_id uuid NOT NULL UNIQUE REFERENCES orders(id),buyer_id uuid NOT NULL REFERENCES users(id),seller_id uuid NOT NULL REFERENCES users(id),rating integer NOT NULL CHECK(rating BETWEEN 1 AND 5),body text NOT NULL,created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS ledger(id uuid PRIMARY KEY,user_id uuid NOT NULL REFERENCES users(id),amount bigint NOT NULL,kind text NOT NULL,order_id uuid REFERENCES orders(id),note text NOT NULL DEFAULT '',created_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS audit(id uuid PRIMARY KEY,actor_id uuid NOT NULL REFERENCES users(id),action text NOT NULL,target text NOT NULL,detail jsonb NOT NULL DEFAULT '{}',created_at timestamptz NOT NULL DEFAULT now());
+CREATE INDEX IF NOT EXISTS products_catalog ON products(status,category_id,created_at);
+CREATE INDEX IF NOT EXISTS orders_buyer ON orders(buyer_id,created_at);
+CREATE INDEX IF NOT EXISTS orders_seller ON orders(seller_id,created_at);
+CREATE INDEX IF NOT EXISTS messages_order ON messages(order_id,created_at);
+CREATE INDEX IF NOT EXISTS stock_available ON stock(product_id,sold);
+CREATE INDEX IF NOT EXISTS sessions_expiry ON sessions(expires_at);
