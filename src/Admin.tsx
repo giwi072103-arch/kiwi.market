@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Users,
   Package,
@@ -22,19 +22,25 @@ export default function Admin({
   openOrder: (id: string) => void;
 }) {
   const [tab, setTab] = useState("overview"),
-    [data, setData] = useState<any>(null),
+    [loaded, setLoaded] = useState<any>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [edit, setEdit] = useState<any>(null),
     [search, setSearch] = useState("");
+  const request = useRef(0);
+  const data = loaded?.tab === tab ? loaded.value : null;
   const isAdmin = ["owner", "admin"].includes(user.role);
   async function load() {
     setError("");
-    setData(null);
+    const current = ++request.current;
+    setLoaded(null);
     try {
-      setData(await api("/admin/" + (tab === "settings" ? "overview" : tab)));
+      const value = await api(
+        "/admin/" + (tab === "settings" ? "overview" : tab),
+      );
+      if (current === request.current) setLoaded({ tab, value });
     } catch (e) {
-      setError((e as Error).message);
+      if (current === request.current) setError((e as Error).message);
     }
   }
   useEffect(() => {
